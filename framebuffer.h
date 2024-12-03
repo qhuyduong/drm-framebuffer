@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-#include <libdrm/drm.h>
-#include <libdrm/drm_mode.h>
+#include <drm.h>
+#include <drm_mode.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 

@@ -7,6 +7,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 
+#include <drm_fourcc.h>
 #include "framebuffer.h"
 
 struct type_name {
@@ -75,6 +76,7 @@ int get_framebuffer(const char *dri_device, const char *connector_name, struct f
     int fd;
     drmModeResPtr res;
     drmModeEncoderPtr encoder = 0;
+    uint32_t handles[4], pitches[4], offsets[4];
 
     /* Open the dri device /dev/dri/cardX */
     fd = open(dri_device, O_RDWR);
@@ -147,14 +149,17 @@ int get_framebuffer(const char *dri_device, const char *connector_name, struct f
         goto cleanup;
     }
 
-    err = drmModeAddFB(fd, resolution->hdisplay, resolution->vdisplay, 24, 32,
-            fb->dumb_framebuffer.pitch, fb->dumb_framebuffer.handle, &fb->buffer_id);
+    handles[0] = fb->dumb_framebuffer.handle;
+    pitches[0] = fb->dumb_framebuffer.pitch;
+    offsets[0] = 0;
+    err = drmModeAddFB2(fd, resolution->hdisplay, resolution->vdisplay, DRM_FORMAT_ABGR8888,
+                        handles, pitches, offsets, &fb->buffer_id, 0);
     if (err) {
         printf("Could not add framebuffer to drm (err=%d)\n", err);
         goto cleanup;
     }
 
-    encoder = drmModeGetEncoder(fd, connector->encoder_id);
+    encoder = drmModeGetEncoder(fd, connector->encoder_id ? connector->encoder_id : connector->encoders[0]);
     if (!encoder) {
         printf("Could not get encoder\n");
         err = -EINVAL;
@@ -162,7 +167,12 @@ int get_framebuffer(const char *dri_device, const char *connector_name, struct f
     }
 
     /* Get the crtc settings */
-    fb->crtc = drmModeGetCrtc(fd, encoder->crtc_id);
+    fb->crtc = drmModeGetCrtc(fd, encoder->crtc_id ? encoder->crtc_id : res->crtcs[0]);
+    if (!fb->crtc) {
+        printf("Could not get crtc\n");
+        err = -EINVAL;
+        goto cleanup;
+    }
 
     struct drm_mode_map_dumb mreq;
 
